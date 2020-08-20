@@ -21,18 +21,23 @@ import (
 
 var interval time.Duration
 var hookCmd string
+var forceUpdate bool
 
 func init() {
 	const (
 		defaultInterval = 24 * time.Hour
 		intervalUsage   = "indicative interval between invocations of this tool"
 		hookUsage       = "optional program to run if all goes well"
+		forceUsage      = "force update"
 	)
 	flag.DurationVar(&interval, "interval", defaultInterval, intervalUsage)
 	flag.DurationVar(&interval, "i", defaultInterval, intervalUsage+" (shorthand)")
 
 	flag.StringVar(&hookCmd, "hook", "", hookUsage)
 	flag.StringVar(&hookCmd, "h", "", hookUsage+" (shorthand)")
+	
+	flag.BoolVar(&forceUpdate, "force", false, forceUsage)
+	flag.BoolVar(&forceUpdate, "f", false, forceUsage+" (shorthand)")
 }
 
 var exitCode = 0
@@ -65,11 +70,13 @@ func main() {
 		}
 		// check existing/cached OCSP response before querying the responder
 		ocspFileName := certBundleFileName + ".ocsp"
-		needsRefresh, resp, err := ocspd.NeedsRefreshFile(ocspFileName, issuer, interval)
-		if err != nil {
-			log.Println(certBundleFileName, ": ", err)
-			exitCode = 1
-			continue
+		needsRefresh := true
+		var resp *ocspd.Response = nil
+		if !forceUpdate {
+			needsRefresh, resp, err = ocspd.NeedsRefreshFile(ocspFileName, issuer, interval)
+			if err != nil {
+				log.Println(certBundleFileName, ": ", err)
+			}
 		}
 		if !needsRefresh {
 			// cached response is "fresh" enough, don't refresh it
